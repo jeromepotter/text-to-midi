@@ -114,10 +114,7 @@
             opacity: 0.5; 
             font-size: 0.65rem;
         }
-        .api-link:hover { 
-            text-decoration: underline; 
-            opacity: 1; 
-        }
+        .api-link:hover { text-decoration: underline; opacity: 1; }
 
         .settings-input {
             width: 100%;
@@ -131,7 +128,7 @@
         }
         .settings-input:focus { border-color: #666; color: #fff; }
 
-        /* --- CHAT LOG --- */
+        /* --- LOG CONSOLE --- */
         #chatContainer {
             flex-grow: 1;
             overflow-y: auto;
@@ -144,14 +141,27 @@
             background: #050505;
         }
         
-        .msg { padding: 10px 15px; font-size: 0.9rem; line-height: 1.5; max-width: 85%; }
-        .msg.user { align-self: flex-end; background: #1a1a1a; border: 1px solid #333; color: #eee; }
-        .msg.system { align-self: flex-start; color: #888; font-family: monospace; font-size: 0.75rem; border-left: 2px solid #333; }
+        .msg { padding: 10px 15px; font-size: 0.9rem; line-height: 1.5; max-width: 95%; }
+        .msg.system { align-self: flex-start; color: #666; font-family: monospace; font-size: 0.75rem; border-left: 2px solid #333; width: 100%; }
+        .msg.model { align-self: flex-start; color: #8BE9FD; font-family: monospace; font-size: 0.8rem; border-left: 2px solid #8BE9FD; white-space: pre-wrap; width: 100%; }
         .msg.error { color: #f55; border-color: #f55; }
 
         /* --- INPUT AREA --- */
         .input-area { position: relative; }
         
+        .input-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 5px;
+        }
+        .input-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+        .copy-btn {
+            background: none; border: none; color: #444; cursor: pointer;
+            font-size: 0.65rem; text-transform: uppercase; padding: 0;
+        }
+        .copy-btn:hover { color: #fff; }
+
         textarea { 
             width: 100%; 
             background: #000; 
@@ -172,17 +182,17 @@
         .btn-row { display: flex; gap: 10px; margin-top: 10px; }
 
         button { 
-            flex: 1; padding: 15px; background: #fff; color: #000; border: none; 
+            flex: 1; padding: 15px; 
+            background: #000; /* Dark Background */
+            color: #fff; /* White Text */
+            border: 1px solid #444; 
             font-weight: 600; font-size: 0.9rem; letter-spacing: 1px; 
             text-transform: uppercase; cursor: pointer; 
             transition: all 0.2s ease;
         }
-        button:hover { opacity: 0.9; }
-        button:disabled { background: #333 !important; color: #666 !important; cursor: not-allowed; }
+        button:hover { background: #222; border-color: #fff; }
+        button:disabled { background: #111 !important; color: #555 !important; border-color: #333 !important; cursor: not-allowed; }
         
-        #resetBtn { flex: 0 0 auto; background: #000; color: #f55; border: 1px solid #333; width: auto; padding: 0 20px; }
-        #resetBtn:hover { border-color: #f55; background: #100; }
-
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #000; }
         ::-webkit-scrollbar-thumb { background: #333; }
@@ -201,12 +211,25 @@
         <h3>2. SETUP</h3>
         <ul>
             <li><strong>DAW:</strong> Enable "IAC Driver" (Mac) or "LoopMIDI" (PC). Arm your DAW tracks & Monitor IN.</li>
-            <li><strong>HARDWARE:</strong> Connect your MIDI Interface via USB. This tool sends raw MIDI to all 16 channels.</li>
+            <li><strong>HARDWARE:</strong> Connect your MIDI Interface via USB. This tool sends raw MIDI to all 16 channels, perfect for controlling hardware synths (like Juno, Moog, Korg).</li>
         </ul>
 
         <h3>3. PROMPT EXAMPLES</h3>
+        
         <span class="prompt-title">BASIC</span>
-        <div class="prompt-block">"On Channel 1, play a C Major chord progression. On Channel 2, play a simple melody in C Major."</div>
+        <div class="prompt-block">
+            "On Channel 1, play a C Major chord progression. On Channel 2, play a simple melody in C Major."
+        </div>
+
+        <span class="prompt-title">INTERMEDIATE</span>
+        <div class="prompt-block">
+            "On Ch 1 play a funky bassline in A Minor. On Ch 2 play staccato chord stabs on the off-beats. On Ch 10 play a driving 4-on-the-floor beat."
+        </div>
+
+        <span class="prompt-title">VIRTUOSO (COMPLEX)</span>
+        <div class="prompt-block">
+            "You are a virtuosic Bebop Jazz pianist. On Channel 1, play a lightning-fast solo using the 'Coltrane Matrix' chord substitutions. Use chromatic enclosure notes and quintuplet runs. On Channel 2, play sparse, rootless chord voicings (shell voicings) on the off-beats. Crucial: Humanize the velocity. Accented notes should be 110-127, ghost notes should be 30-50. Don't be robotic. The piece should be 20 seconds long."
+        </div>
     </div>
 
     <div class="settings-bar">
@@ -231,18 +254,21 @@
     </div>
 
     <div class="input-area">
-        <textarea id="prompt" placeholder="Describe the music..."></textarea>
+        <div class="input-header">
+            <span class="input-label">Prompt</span>
+            <button class="copy-btn" onclick="copyPrompt()">[ COPY PROMPT ]</button>
+        </div>
+        <textarea id="prompt" placeholder="Describe the music (Instruments, Key, Duration, Vibe)..."></textarea>
         <div class="btn-row">
-            <button id="resetBtn" onclick="resetSession()" title="Clear History">RESET</button>
-            <button id="generateBtn" onclick="generateMusic()">SEND COMMAND</button>
+            <button id="generateBtn" onclick="handleButtonClick()">SEND PROMPT</button>
         </div>
     </div>
 </div>
 
 <script>
     let midiOutput = null;
-    let chatHistory = []; 
     let loadingInterval = null;
+    let isResetState = false; // Tracks if button is in "NEW PROMPT" mode
 
     function toggleGuide() {
         const guide = document.getElementById('guide');
@@ -253,6 +279,17 @@
         } else {
             guide.style.display = 'none';
             btn.innerText = '[ HOW TO USE ]';
+        }
+    }
+
+    function copyPrompt() {
+        const text = document.getElementById('prompt').value;
+        if(text) {
+            navigator.clipboard.writeText(text);
+            const btn = document.querySelector('.copy-btn');
+            const original = btn.innerText;
+            btn.innerText = "[ COPIED! ]";
+            setTimeout(() => btn.innerText = original, 1500);
         }
     }
 
@@ -301,6 +338,24 @@
         container.scrollTop = container.scrollHeight;
     }
 
+    // Handles the single button logic
+    function handleButtonClick() {
+        if (isResetState) {
+            resetSession();
+        } else {
+            generateMusic();
+        }
+    }
+
+    function resetSession() {
+        document.getElementById('chatContainer').innerHTML = '<div class="msg system">System Ready. Waiting for input...</div>';
+        document.getElementById('prompt').value = ""; // Clear Everything
+        
+        const btn = document.getElementById('generateBtn');
+        btn.innerText = "SEND PROMPT";
+        isResetState = false;
+    }
+
     function startLoading() {
         let dots = 0;
         const btn = document.getElementById('generateBtn');
@@ -308,7 +363,7 @@
         
         loadingInterval = setInterval(() => {
             dots = (dots + 1) % 4; 
-            let text = "WORKING";
+            let text = "COMPOSING";
             for(let i=0; i<dots; i++) text += ".";
             btn.innerText = text;
         }, 400); 
@@ -319,24 +374,31 @@
         const btn = document.getElementById('generateBtn');
         
         if (success) {
-            const originalText = "SEND COMMAND";
-            const originalColor = "#fff";
-            
             btn.innerText = "SUCCESS!";
             btn.style.backgroundColor = "#4CAF50"; // Green
-            btn.style.color = "#fff";
+            btn.style.borderColor = "#4CAF50";
             
-            // Revert button after 2 seconds
+            // Wait 2s, then switch to "PLAYING..." state (still disabled)
             setTimeout(() => {
-                btn.innerText = originalText;
-                btn.style.backgroundColor = originalColor;
-                btn.style.color = "#000";
-                btn.disabled = false;
+                btn.innerText = "PLAYING...";
+                btn.style.backgroundColor = "#000";
+                btn.style.borderColor = "#444";
+                // Button remains disabled until playback finishes in playSequence()
             }, 2000); 
         } else {
-            btn.innerText = "SEND COMMAND";
+            // Error state: revert immediately to allow retry
+            btn.innerText = "SEND PROMPT";
             btn.disabled = false;
         }
+    }
+
+    // --- NEW HELPER: Remove Comments from JSON String ---
+    function cleanAndParseJSON(jsonString) {
+        // Remove single line // comments
+        let cleaned = jsonString.replace(/\/\/.*$/gm, "");
+        // Remove multi-line /* */ comments
+        cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, "");
+        return JSON.parse(cleaned);
     }
 
     async function generateMusic() {
@@ -347,34 +409,38 @@
         if (!midiOutput) return appendMsg("system error", "Select MIDI Output.");
         if (!userPrompt) return;
 
-        appendMsg("user", userPrompt);
-        document.getElementById('prompt').value = ""; 
         startLoading();
 
         const systemInstruction = `
-        You are a Virtuosic MIDI Composer. 
-        Output only valid JSON. NO Markdown.
-        Format: { "tracks": [ { "channel": 1-16, "notes": [ { "pitch": 60, "velocity": 100, "start_time": 0.0, "duration": 1.0 } ] } ] }
-        Start time is in seconds.
+        You are a Virtuosic MIDI Composer.
+        
+        STEP 1: CREATIVE PLAN (REQUIRED)
+        Before writing any JSON, you must explain your musical approach. 
+        - Describe the rhythmic interaction between channels.
+        - Explain how you will avoid repetition (e.g. "I will introduce a new motif at bar 4").
+        - Explain how you will ensure the piece lasts the full requested duration.
+        
+        STEP 2: MIDI DATA
+        Output the MIDI data in valid JSON. 
+        - DO NOT put comments inside the JSON code block.
+        - CRITICAL: Do not simply loop 1 bar. You must write unique variations.
+        - CRITICAL: Ensure the last note ends at or after the requested duration.
+        - HUMAN FEEL: You are NOT bound to a grid. Use micro-timing (e.g., start_time=1.05 instead of 1.00) for "swing" or "rubato" feels if the prompt requests it.
+        - Format: { "tracks": [ { "channel": 1-16, "notes": [ { "pitch": 60, "velocity": 100, "start_time": 0.0, "duration": 1.0 } ] } ] }
         `;
 
-        if (chatHistory.length === 0) {
-            chatHistory.push({
+        const payload = {
+            contents: [{
                 role: "user",
                 parts: [{ text: systemInstruction + "\n\nUser Request: " + userPrompt }]
-            });
-        } else {
-            chatHistory.push({
-                role: "user",
-                parts: [{ text: userPrompt }]
-            });
-        }
+            }]
+        };
 
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${key}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: chatHistory })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
@@ -383,32 +449,44 @@
             }
 
             const data = await response.json();
+
+            // 1. TOKEN COUNT
+            if (data.usageMetadata) {
+                const tokens = data.usageMetadata.candidatesTokenCount;
+                appendMsg("system", `Generated ${tokens} tokens.`);
+            }
+
             const rawText = data.candidates[0].content.parts[0].text;
             
-            chatHistory.push({
-                role: "model",
-                parts: [{ text: rawText }]
-            });
-
+            // 2. PARSE THINKING VS JSON
             const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) throw new Error("Invalid Data Received");
             
-            const musicData = JSON.parse(jsonMatch[0]);
-            playSequence(musicData);
-            
-            appendMsg("system", "MIDI Sent ✓");
-            stopLoading(true);
+            if (jsonMatch) {
+                const jsonIndex = rawText.indexOf(jsonMatch[0]);
+                let thoughts = rawText.substring(0, jsonIndex).trim();
+                
+                // Cleanup Markdown tags
+                thoughts = thoughts.replace(/```json/g, "").replace(/```/g, "").trim();
+
+                if (thoughts) {
+                    appendMsg("model", thoughts); 
+                }
+                
+                // USE NEW CLEANER FUNCTION
+                const musicData = cleanAndParseJSON(jsonMatch[0]);
+                
+                playSequence(musicData);
+                appendMsg("system", "MIDI Sent ✓");
+                stopLoading(true);
+            } else {
+                appendMsg("model", rawText);
+                throw new Error("Model generated text but no valid MIDI JSON.");
+            }
 
         } catch (e) {
             appendMsg("system error", e.message);
-            chatHistory.pop(); 
             stopLoading(false);
         }
-    }
-
-    function resetSession() {
-        chatHistory = [];
-        document.getElementById('chatContainer').innerHTML = '<div class="msg system">Session Reset. Waiting for input...</div>';
     }
 
     function playSequence(data) {
@@ -424,7 +502,6 @@
                 const start = now + (note.start_time * 1000);
                 const end = start + (note.duration * 1000);
                 
-                // Track song length
                 if (note.start_time + note.duration > maxDuration) {
                     maxDuration = note.start_time + note.duration;
                 }
@@ -437,9 +514,17 @@
 
         appendMsg("system", `Playing ${maxDuration.toFixed(1)}s sequence...`);
 
-        // Alert when playback is done
+        // Timer for Playback Finish
         setTimeout(() => {
             appendMsg("system", "Playback Finished.");
+            
+            // SWITCH TO "NEW PROMPT" STATE
+            const btn = document.getElementById('generateBtn');
+            btn.innerText = "NEW PROMPT";
+            btn.disabled = false;
+            btn.style.borderColor = "#fff"; // Highlight border slightly
+            isResetState = true;
+            
         }, maxDuration * 1000);
     }
 </script>

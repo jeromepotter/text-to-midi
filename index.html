@@ -125,29 +125,15 @@
             font-size: 0.8rem;
             font-family: monospace;
             outline: none;
+            box-sizing: border-box;
         }
         .settings-input:focus { border-color: #666; color: #fff; }
 
-        /* --- LOG CONSOLE --- */
-        #chatContainer {
-            flex-grow: 1;
-            overflow-y: auto;
-            border: 1px solid #222;
-            padding: 20px;
-            margin-bottom: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            background: #050505;
-        }
-        
-        .msg { padding: 10px 15px; font-size: 0.9rem; line-height: 1.5; max-width: 95%; }
-        .msg.system { align-self: flex-start; color: #666; font-family: monospace; font-size: 0.75rem; border-left: 2px solid #333; width: 100%; }
-        .msg.model { align-self: flex-start; color: #8BE9FD; font-family: monospace; font-size: 0.8rem; border-left: 2px solid #8BE9FD; white-space: pre-wrap; width: 100%; }
-        .msg.error { color: #f55; border-color: #f55; }
-
         /* --- INPUT AREA --- */
-        .input-area { position: relative; }
+        .input-area { 
+            position: relative; 
+            margin-bottom: 20px; 
+        }
         
         .input-header {
             display: flex;
@@ -156,11 +142,6 @@
             margin-bottom: 5px;
         }
         .input-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
-        .copy-btn {
-            background: none; border: none; color: #444; cursor: pointer;
-            font-size: 0.65rem; text-transform: uppercase; padding: 0;
-        }
-        .copy-btn:hover { color: #fff; }
 
         textarea { 
             width: 100%; 
@@ -183,8 +164,8 @@
 
         button { 
             flex: 1; padding: 15px; 
-            background: #000; /* Dark Background */
-            color: #fff; /* White Text */
+            background: #000; 
+            color: #fff; 
             border: 1px solid #444; 
             font-weight: 600; font-size: 0.9rem; letter-spacing: 1px; 
             text-transform: uppercase; cursor: pointer; 
@@ -192,6 +173,51 @@
         }
         button:hover { background: #222; border-color: #fff; }
         button:disabled { background: #111 !important; color: #555 !important; border-color: #333 !important; cursor: not-allowed; }
+
+        /* STOP BUTTON STYLE */
+        button.stop-mode {
+            background-color: #330000;
+            border-color: #ff4444;
+            color: #ff4444;
+        }
+        button.stop-mode:hover {
+            background-color: #550000;
+            color: #fff;
+        }
+
+        /* --- LOG CONSOLE --- */
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+        }
+
+        .copy-response-btn {
+            background: none; border: none; color: #444; cursor: pointer;
+            font-size: 0.65rem; text-transform: uppercase; padding: 0;
+            text-align: right;
+        }
+        .copy-response-btn:hover { color: #fff; background: transparent; border: none; }
+
+        #chatContainer {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid #222;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: #050505;
+        }
+        
+        .msg { padding: 10px 15px; font-size: 0.9rem; line-height: 1.5; max-width: 95%; }
+        .msg.system { align-self: flex-start; color: #666; font-family: monospace; font-size: 0.75rem; border-left: 2px solid #333; width: 100%; }
+        .msg.model { align-self: flex-start; color: #8BE9FD; font-family: monospace; font-size: 0.8rem; border-left: 2px solid #8BE9FD; white-space: pre-wrap; width: 100%; }
+        .msg.error { color: #f55; border-color: #f55; }
         
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #000; }
@@ -205,13 +231,17 @@
     
     <div class="how-to-toggle" onclick="toggleGuide()">[ HOW TO USE ]</div>
     <div id="guide" class="how-to-content">
-        <h3>1. API KEYS</h3>
-        Get a key from Google AI Studio. If stuck, reset session or get a new key.
-        
+        <h3>1. TIPS FOR SUCCESS</h3>
+        <ul>
+            <li><strong>Duration:</strong> AI works best with shorter loops (under 60s).</li>
+            <li><strong>Map Your DAW:</strong> The "Channel" in your prompt must match the "Track" in your DAW. (e.g. If you ask for Piano on Ch 1, make sure Track 1 has a Piano loaded).</li>
+            <li><strong>BPM:</strong> Telling the AI the BPM helps it calculate note timing accurately.</li>
+        </ul>
+
         <h3>2. SETUP</h3>
         <ul>
             <li><strong>DAW:</strong> Enable "IAC Driver" (Mac) or "LoopMIDI" (PC). Arm your DAW tracks & Monitor IN.</li>
-            <li><strong>HARDWARE:</strong> Connect your MIDI Interface via USB. This tool sends raw MIDI to all 16 channels, perfect for controlling hardware synths (like Juno, Moog, Korg).</li>
+            <li><strong>HARDWARE:</strong> Connect your MIDI Interface via USB. This tool sends raw MIDI to all 16 channels.</li>
         </ul>
 
         <h3>3. PROMPT EXAMPLES</h3>
@@ -226,9 +256,13 @@
             "On Ch 1 play a funky bassline in A Minor. On Ch 2 play staccato chord stabs on the off-beats. On Ch 10 play a driving 4-on-the-floor beat."
         </div>
 
-        <span class="prompt-title">VIRTUOSO (COMPLEX)</span>
+        <span class="prompt-title">VIRTUOSO (JAZZ TRIO)</span>
         <div class="prompt-block">
-            "You are a virtuosic Bebop Jazz pianist. On Channel 1, play a lightning-fast solo using the 'Coltrane Matrix' chord substitutions. Use chromatic enclosure notes and quintuplet runs. On Channel 2, play sparse, rootless chord voicings (shell voicings) on the off-beats. Crucial: Humanize the velocity. Accented notes should be 110-127, ghost notes should be 30-50. Don't be robotic. The piece should be 20 seconds long."
+            "Create a complex Bebop Jazz piece. 220 BPM. Swing feel.
+            Ch 1 (Piano): Sparse, rootless 'Bill Evans' style voicings. Syncopated comping.
+            Ch 2 (Double Bass): Fast walking bass line with triplet skips.
+            Ch 3 (Trumpet): A virtuosic, breathless solo. Use the 'Coltrane Matrix' and chromatic runs.
+            Humanize the velocity and timing significantly."
         </div>
     </div>
 
@@ -249,26 +283,31 @@
         </div>
     </div>
 
+    <div class="input-area">
+        <div class="input-header">
+            <span class="input-label">Prompt</span>
+        </div>
+        <textarea id="prompt" placeholder="Describe the music (Instruments, Key, Duration, Vibe)..."></textarea>
+        <div class="btn-row">
+            <button id="generateBtn" onclick="handleButtonClick()">GENERATE</button>
+        </div>
+    </div>
+
+    <div class="chat-header">
+        <span class="input-label">RESPONSE LOG</span>
+        <button class="copy-response-btn" onclick="copyResponse()">[ COPY RESPONSE ]</button>
+    </div>
     <div id="chatContainer">
         <div class="msg system">System Ready. Waiting for input...</div>
     </div>
 
-    <div class="input-area">
-        <div class="input-header">
-            <span class="input-label">Prompt</span>
-            <button class="copy-btn" onclick="copyPrompt()">[ COPY PROMPT ]</button>
-        </div>
-        <textarea id="prompt" placeholder="Describe the music (Instruments, Key, Duration, Vibe)..."></textarea>
-        <div class="btn-row">
-            <button id="generateBtn" onclick="handleButtonClick()">SEND PROMPT</button>
-        </div>
-    </div>
 </div>
 
 <script>
     let midiOutput = null;
     let loadingInterval = null;
-    let isResetState = false; // Tracks if button is in "NEW PROMPT" mode
+    let isPlaying = false; 
+    let scheduledTimers = []; 
 
     function toggleGuide() {
         const guide = document.getElementById('guide');
@@ -282,14 +321,20 @@
         }
     }
 
-    function copyPrompt() {
-        const text = document.getElementById('prompt').value;
-        if(text) {
-            navigator.clipboard.writeText(text);
-            const btn = document.querySelector('.copy-btn');
+    function copyResponse() {
+        const messages = document.querySelectorAll('.msg.model');
+        if (messages.length > 0) {
+            const lastMsg = messages[messages.length - 1];
+            navigator.clipboard.writeText(lastMsg.innerText);
+            
+            const btn = document.querySelector('.copy-response-btn');
             const original = btn.innerText;
             btn.innerText = "[ COPIED! ]";
-            setTimeout(() => btn.innerText = original, 1500);
+            btn.style.color = "#fff";
+            setTimeout(() => {
+                btn.innerText = original;
+                btn.style.color = "";
+            }, 1500);
         }
     }
 
@@ -338,22 +383,40 @@
         container.scrollTop = container.scrollHeight;
     }
 
-    // Handles the single button logic
     function handleButtonClick() {
-        if (isResetState) {
-            resetSession();
+        if (isPlaying) {
+            // If currently playing, STOP IT
+            stopPlayback();
         } else {
+            // Normal Generation Logic
+            const container = document.getElementById('chatContainer');
+            container.innerHTML = '<div class="msg system">System Ready. Processing...</div>';
             generateMusic();
         }
     }
 
-    function resetSession() {
-        document.getElementById('chatContainer').innerHTML = '<div class="msg system">System Ready. Waiting for input...</div>';
-        document.getElementById('prompt').value = ""; // Clear Everything
+    function stopPlayback() {
+        isPlaying = false;
         
+        // 1. Cancel all future note timers
+        scheduledTimers.forEach(id => clearTimeout(id));
+        scheduledTimers = [];
+
+        // 2. Send "All Notes Off" (CC 123) and "All Sound Off" (CC 120) to all 16 channels
+        if (midiOutput) {
+            for (let ch = 0; ch < 16; ch++) {
+                midiOutput.send([0xB0 + ch, 123, 0]); 
+                midiOutput.send([0xB0 + ch, 120, 0]);
+            }
+        }
+
+        appendMsg("system", "Playback Stopped by User.");
+
+        // 3. Reset Button UI
         const btn = document.getElementById('generateBtn');
-        btn.innerText = "SEND PROMPT";
-        isResetState = false;
+        btn.innerText = "GENERATE";
+        btn.classList.remove('stop-mode');
+        btn.disabled = false;
     }
 
     function startLoading() {
@@ -375,30 +438,76 @@
         
         if (success) {
             btn.innerText = "SUCCESS!";
-            btn.style.backgroundColor = "#4CAF50"; // Green
+            btn.style.backgroundColor = "#4CAF50"; 
             btn.style.borderColor = "#4CAF50";
             
-            // Wait 2s, then switch to "PLAYING..." state (still disabled)
+            // Wait 2s, then switch to STOP button
             setTimeout(() => {
-                btn.innerText = "PLAYING...";
-                btn.style.backgroundColor = "#000";
-                btn.style.borderColor = "#444";
-                // Button remains disabled until playback finishes in playSequence()
+                if(isPlaying) {
+                    btn.innerText = "STOP";
+                    btn.style.backgroundColor = ""; // handled by css class
+                    btn.style.borderColor = "";
+                    btn.classList.add('stop-mode');
+                    btn.disabled = false; 
+                }
             }, 2000); 
         } else {
-            // Error state: revert immediately to allow retry
-            btn.innerText = "SEND PROMPT";
+            btn.innerText = "GENERATE";
             btn.disabled = false;
         }
     }
 
-    // --- NEW HELPER: Remove Comments from JSON String ---
-    function cleanAndParseJSON(jsonString) {
-        // Remove single line // comments
+  function cleanAndParseJSON(jsonString) {
+        // 1. Remove comments (// and /* */)
         let cleaned = jsonString.replace(/\/\/.*$/gm, "");
-        // Remove multi-line /* */ comments
         cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, "");
-        return JSON.parse(cleaned);
+
+        // 2. Fix common "missing comma" error between objects ( } { -> }, { )
+        cleaned = cleaned.replace(/}\s*{/g, "}, {");
+        
+        // 3. Remove trailing commas before closing brackets ( , } -> } )
+        cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+
+        try {
+            return JSON.parse(cleaned);
+        } catch (e) {
+            // 4. If parse fails, it might be TRUNCATED (ran out of tokens).
+            // Let's try to close the open brackets.
+            console.warn("JSON broken, attempting auto-repair...");
+            
+            // Simple stack to track open brackets
+            let stack = [];
+            let isString = false;
+            
+            for (let i = 0; i < cleaned.length; i++) {
+                const char = cleaned[i];
+                if (char === '"' && cleaned[i-1] !== '\\') {
+                    isString = !isString;
+                }
+                if (!isString) {
+                    if (char === '{') stack.push('}');
+                    else if (char === '[') stack.push(']');
+                    else if (char === '}' || char === ']') {
+                        // Pop matching bracket if found
+                        if (stack.length > 0 && stack[stack.length-1] === char) {
+                            stack.pop();
+                        }
+                    }
+                }
+            }
+            
+            // Append whatever is needed to close the file
+            while(stack.length > 0) {
+                cleaned += stack.pop();
+            }
+
+            try {
+                return JSON.parse(cleaned);
+            } catch (e2) {
+                // If it STILL fails, it's unfixable.
+                throw new Error("JSON Generation was too corrupted to fix. Try a shorter duration.");
+            }
+        }
     }
 
     async function generateMusic() {
@@ -412,7 +521,7 @@
         startLoading();
 
         const systemInstruction = `
-        You are a Virtuosic MIDI Composer.
+        You are a Virtuosic MIDI Composer with a massive token budget.
         
         STEP 1: CREATIVE PLAN (REQUIRED)
         Before writing any JSON, you must explain your musical approach. 
@@ -437,7 +546,7 @@
         };
 
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${key}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${key}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -450,31 +559,27 @@
 
             const data = await response.json();
 
-            // 1. TOKEN COUNT
             if (data.usageMetadata) {
                 const tokens = data.usageMetadata.candidatesTokenCount;
                 appendMsg("system", `Generated ${tokens} tokens.`);
             }
 
             const rawText = data.candidates[0].content.parts[0].text;
-            
-            // 2. PARSE THINKING VS JSON
             const jsonMatch = rawText.match(/\{[\s\S]*\}/);
             
             if (jsonMatch) {
                 const jsonIndex = rawText.indexOf(jsonMatch[0]);
                 let thoughts = rawText.substring(0, jsonIndex).trim();
-                
-                // Cleanup Markdown tags
                 thoughts = thoughts.replace(/```json/g, "").replace(/```/g, "").trim();
 
                 if (thoughts) {
                     appendMsg("model", thoughts); 
                 }
                 
-                // USE NEW CLEANER FUNCTION
                 const musicData = cleanAndParseJSON(jsonMatch[0]);
                 
+                // IMPORTANT: Set playing state before calling play
+                isPlaying = true;
                 playSequence(musicData);
                 appendMsg("system", "MIDI Sent ✓");
                 stopLoading(true);
@@ -486,46 +591,61 @@
         } catch (e) {
             appendMsg("system error", e.message);
             stopLoading(false);
+            isPlaying = false;
         }
     }
 
     function playSequence(data) {
-        const now = performance.now();
+        scheduledTimers = [];
+
         if (!data.tracks) return;
 
-        let totalNotes = 0;
         let maxDuration = 0;
 
         data.tracks.forEach(track => {
             const channel = Math.max(0, Math.min(15, (track.channel || 1) - 1));
+            
             track.notes.forEach(note => {
-                const start = now + (note.start_time * 1000);
-                const end = start + (note.duration * 1000);
+                let pitch = parseInt(note.pitch);
+                if (isNaN(pitch)) pitch = 60; 
+                pitch = Math.max(0, Math.min(127, pitch));
+
+                let velocity = parseInt(note.velocity || 100);
+                if (isNaN(velocity)) velocity = 100;
+                velocity = Math.max(0, Math.min(127, velocity));
+
+                const startTimeMs = note.start_time * 1000;
+                const durationMs = note.duration * 1000;
+                const endTimeMs = startTimeMs + durationMs;
                 
                 if (note.start_time + note.duration > maxDuration) {
                     maxDuration = note.start_time + note.duration;
                 }
 
-                midiOutput.send([0x90 + channel, note.pitch, note.velocity || 100], start);
-                midiOutput.send([0x80 + channel, note.pitch, 0], end);
-                totalNotes++;
+                const onId = setTimeout(() => {
+                    if(midiOutput) midiOutput.send([0x90 + channel, pitch, velocity]);
+                }, startTimeMs);
+                scheduledTimers.push(onId);
+
+                const offId = setTimeout(() => {
+                    if(midiOutput) midiOutput.send([0x80 + channel, pitch, 0]);
+                }, endTimeMs);
+                scheduledTimers.push(offId);
             });
         });
 
         appendMsg("system", `Playing ${maxDuration.toFixed(1)}s sequence...`);
 
-        // Timer for Playback Finish
-        setTimeout(() => {
+        const finishId = setTimeout(() => {
             appendMsg("system", "Playback Finished.");
-            
-            // SWITCH TO "NEW PROMPT" STATE
             const btn = document.getElementById('generateBtn');
-            btn.innerText = "NEW PROMPT";
-            btn.disabled = false;
-            btn.style.borderColor = "#fff"; // Highlight border slightly
-            isResetState = true;
-            
+            btn.innerText = "GENERATE";
+            btn.classList.remove('stop-mode');
+            btn.disabled = false; 
+            isPlaying = false;
         }, maxDuration * 1000);
+        
+        scheduledTimers.push(finishId);
     }
 </script>
 

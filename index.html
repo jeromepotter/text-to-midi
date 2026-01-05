@@ -129,6 +129,26 @@
         }
         .settings-input:focus { border-color: #666; color: #fff; }
 
+        /* --- NEW API BUTTON STYLES --- */
+        .api-input-wrapper {
+            display: flex;
+            gap: 5px;
+        }
+
+        .api-enter-btn {
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.7rem;
+            padding: 0 15px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        .api-enter-btn:hover { background: #333; }
+
+
         /* --- INPUT AREA --- */
         .input-area { 
             position: relative; 
@@ -168,6 +188,12 @@
             box-sizing: border-box;
         }
         textarea:focus { border-color: #fff; }
+        
+        /* --- NEW PLACEHOLDER STYLE --- */
+        textarea::placeholder {
+            color: #ffffff;
+            opacity: 1; 
+        }
 
         .btn-row { display: flex; gap: 10px; margin-top: 10px; }
 
@@ -291,7 +317,10 @@
                 1. API KEY
                 <a href="https://aistudio.google.com/app/apikey" target="_blank" class="api-link">(GET KEY)</a>
             </span>
-            <input type="password" id="apiKey" class="settings-input" placeholder="Paste Key Here...">
+            <div class="api-input-wrapper">
+                <input type="password" id="apiKey" class="settings-input" placeholder="Paste Key Here...">
+                <button id="apiEnterBtn" class="api-enter-btn" onclick="validateApiKey()">ENTER</button>
+            </div>
         </div>
         <div class="settings-group">
             <span class="settings-label">
@@ -329,6 +358,54 @@
     let scheduledTimers = []; 
     let conversationHistory = []; // Stores the chat context
 
+    // --- NEW VALIDATION FUNCTIONS ---
+    async function validateApiKey() {
+        const key = document.getElementById('apiKey').value.trim();
+        const btn = document.getElementById('apiEnterBtn');
+        
+        if (!key) {
+            flashButton(btn, false);
+            return;
+        }
+
+        btn.innerText = "CHECKING...";
+
+        try {
+            // Check key validity by pinging the models endpoint
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+            
+            if (response.ok) {
+                flashButton(btn, true);
+            } else {
+                flashButton(btn, false);
+            }
+        } catch (e) {
+            flashButton(btn, false);
+        }
+    }
+
+    function flashButton(btn, success) {
+        const originalText = "ENTER";
+        
+        if (success) {
+            btn.style.backgroundColor = "#4CAF50"; // Green
+            btn.style.borderColor = "#4CAF50";
+            btn.innerText = "VALID";
+        } else {
+            btn.style.backgroundColor = "#ff4444"; // Red
+            btn.style.borderColor = "#ff4444";
+            btn.innerText = "INVALID";
+        }
+
+        // Reset after 2 seconds
+        setTimeout(() => {
+            btn.style.backgroundColor = ""; 
+            btn.style.borderColor = "";
+            btn.innerText = originalText;
+        }, 2000);
+    }
+    // ---------------------------------
+
     function toggleGuide() {
         const guide = document.getElementById('guide');
         const btn = document.querySelector('.how-to-toggle');
@@ -345,6 +422,10 @@
         conversationHistory = [];
         const container = document.getElementById('chatContainer');
         container.innerHTML = '<div class="msg system">Memory Cleared. Starting fresh session.</div>';
+        
+        // Also reset prompt input to default state when memory is cleared
+        const promptInput = document.getElementById('prompt');
+        promptInput.placeholder = "Describe the music (Instruments, Key, Duration, Vibe)...";
     }
 
     if (navigator.requestMIDIAccess) {
@@ -518,7 +599,8 @@
 
     async function generateMusic() {
         const key = document.getElementById('apiKey').value.trim();
-        const userPrompt = document.getElementById('prompt').value.trim();
+        const promptInput = document.getElementById('prompt');
+        const userPrompt = promptInput.value.trim();
         
         if (!key) return appendMsg("system error", "Please enter API Key.");
         if (!midiOutput) return appendMsg("system error", "Select MIDI Output.");
@@ -526,6 +608,10 @@
 
         // --- NEW: Add User Prompt to Chat Log ---
         appendMsg("user", userPrompt);
+
+        // --- RESET PROMPT & CHANGE PLACEHOLDER ---
+        promptInput.value = ""; 
+        promptInput.placeholder = "Ask for changes...";
 
         startLoading();
 

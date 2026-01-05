@@ -143,6 +143,12 @@
         }
         .input-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
 
+        .clear-btn {
+            background: none; border: none; color: #444; cursor: pointer;
+            font-size: 0.65rem; text-transform: uppercase; padding: 0;
+        }
+        .clear-btn:hover { color: #f55; } /* Red hover for destructive action */
+
         textarea { 
             width: 100%; 
             background: #000; 
@@ -286,6 +292,7 @@
     <div class="input-area">
         <div class="input-header">
             <span class="input-label">Prompt</span>
+            <button class="clear-btn" onclick="clearHistory()">[ CLEAR MEMORY ]</button>
         </div>
         <textarea id="prompt" placeholder="Describe the music (Instruments, Key, Duration, Vibe)..."></textarea>
         <div class="btn-row">
@@ -308,6 +315,7 @@
     let loadingInterval = null;
     let isPlaying = false; 
     let scheduledTimers = []; 
+    let conversationHistory = []; // Stores the chat context
 
     function toggleGuide() {
         const guide = document.getElementById('guide');
@@ -319,6 +327,12 @@
             guide.style.display = 'none';
             btn.innerText = '[ HOW TO USE ]';
         }
+    }
+
+    function clearHistory() {
+        conversationHistory = [];
+        const container = document.getElementById('chatContainer');
+        container.innerHTML = '<div class="msg system">Memory Cleared. Starting fresh session.</div>';
     }
 
     function copyResponse() {
@@ -389,8 +403,8 @@
             stopPlayback();
         } else {
             // Normal Generation Logic
-            const container = document.getElementById('chatContainer');
-            container.innerHTML = '<div class="msg system">System Ready. Processing...</div>';
+            // Note: We do NOT clear the chat container here anymore, 
+            // so you can see the history of your conversation.
             generateMusic();
         }
     }
@@ -520,6 +534,12 @@
 
         startLoading();
 
+        // 1. ADD USER PROMPT TO HISTORY
+        conversationHistory.push({
+            role: "user",
+            parts: [{ text: userPrompt }]
+        });
+
         const systemInstruction = `
         You are a Virtuosic MIDI Composer with a massive token budget.
         
@@ -538,11 +558,12 @@
         - Format: { "tracks": [ { "channel": 1-16, "notes": [ { "pitch": 60, "velocity": 100, "start_time": 0.0, "duration": 1.0 } ] } ] }
         `;
 
+        // 2. SEND FULL HISTORY
         const payload = {
-            contents: [{
-                role: "user",
-                parts: [{ text: systemInstruction + "\n\nUser Request: " + userPrompt }]
-            }]
+            system_instruction: {
+                parts: [{ text: systemInstruction }]
+            },
+            contents: conversationHistory
         };
 
         try {
@@ -565,6 +586,13 @@
             }
 
             const rawText = data.candidates[0].content.parts[0].text;
+            
+            // 3. ADD MODEL RESPONSE TO HISTORY (so it remembers what it wrote)
+            conversationHistory.push({
+                role: "model",
+                parts: [{ text: rawText }]
+            });
+
             const jsonMatch = rawText.match(/\{[\s\S]*\}/);
             
             if (jsonMatch) {

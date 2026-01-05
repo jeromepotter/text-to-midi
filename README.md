@@ -1,6 +1,6 @@
-#  Text-to-MIDI Generator (Gemini 3 Flash Powered)
+#  Text-to-MIDI Generator
 
-> **A browser-based, generative MIDI interface that turns natural language into raw note data for your DAW or Hardware Synths.**
+> **A browser-based, generative MIDI interface powered by Gemini 3 Flash that turns natural language into raw note data for your DAW or Hardware Synths.**
 
 ## The Vision
 Most AI music tools generate audio files (.wav). They are "jukeboxes"—you consume what they give you.

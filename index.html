@@ -355,8 +355,13 @@
     let midiOutput = null;
     let loadingInterval = null;
     let isPlaying = false; 
-    let scheduledTimers = []; 
+    let schedulerTimerId = null;
+    let finishTimeoutId = null;
     let conversationHistory = []; // Stores the chat context
+    let audioContext = null;
+
+    const LOOKAHEAD_MS = 25;
+    const SCHEDULE_AHEAD_TIME = 0.1;
 
     // --- NEW VALIDATION FUNCTIONS ---
     async function validateApiKey() {
@@ -485,9 +490,11 @@
     function stopPlayback() {
         isPlaying = false;
         
-        // 1. Cancel all future note timers
-        scheduledTimers.forEach(id => clearTimeout(id));
-        scheduledTimers = [];
+        // 1. Cancel scheduler and finish timer
+        if (schedulerTimerId) clearTimeout(schedulerTimerId);
+        if (finishTimeoutId) clearTimeout(finishTimeoutId);
+        schedulerTimerId = null;
+        finishTimeoutId = null;
 
         // 2. Send "All Notes Off" (CC 123) and "All Sound Off" (CC 120) to all 16 channels
         if (midiOutput) {
@@ -692,7 +699,7 @@
                 const musicData = cleanAndParseJSON(jsonMatch[0]);
                 
                 isPlaying = true;
-                playSequence(musicData);
+                await playSequence(musicData);
                 appendMsg("system", "MIDI Sent ✓");
                 stopLoading(true);
             } else {
@@ -707,11 +714,23 @@
         }
     }
 
-    function playSequence(data) {
-        scheduledTimers = [];
+    async function playSequence(data) {
+        if (!audioContext) {
+            audioContext = new AudioContext();
+        }
+
+        if (audioContext.state === "suspended") {
+            await audioContext.resume();
+        }
+
+        if (schedulerTimerId) clearTimeout(schedulerTimerId);
+        if (finishTimeoutId) clearTimeout(finishTimeoutId);
+        schedulerTimerId = null;
+        finishTimeoutId = null;
 
         if (!data.tracks) return;
 
+        const events = [];
         let maxDuration = 0;
 
         data.tracks.forEach(track => {
@@ -726,38 +745,65 @@
                 if (isNaN(velocity)) velocity = 100;
                 velocity = Math.max(0, Math.min(127, velocity));
 
-                const startTimeMs = note.start_time * 1000;
-                const durationMs = note.duration * 1000;
-                const endTimeMs = startTimeMs + durationMs;
+                const startTime = note.start_time;
+                const duration = note.duration;
+                const endTime = startTime + duration;
                 
-                if (note.start_time + note.duration > maxDuration) {
-                    maxDuration = note.start_time + note.duration;
+                if (endTime > maxDuration) {
+                    maxDuration = endTime;
                 }
 
-                const onId = setTimeout(() => {
-                    if(midiOutput) midiOutput.send([0x90 + channel, pitch, velocity]);
-                }, startTimeMs);
-                scheduledTimers.push(onId);
-
-                const offId = setTimeout(() => {
-                    if(midiOutput) midiOutput.send([0x80 + channel, pitch, 0]);
-                }, endTimeMs);
-                scheduledTimers.push(offId);
+                events.push({
+                    time: startTime,
+                    message: [0x90 + channel, pitch, velocity]
+                });
+                events.push({
+                    time: endTime,
+                    message: [0x80 + channel, pitch, 0]
+                });
             });
         });
 
+        events.sort((a, b) => a.time - b.time);
+
+        const sequenceStartTime = audioContext.currentTime;
+        let nextEventIndex = 0;
+
+        const scheduleEvents = () => {
+            if (!isPlaying || !midiOutput) return;
+
+            const currentTime = audioContext.currentTime;
+            const scheduleUntil = currentTime + SCHEDULE_AHEAD_TIME;
+
+            while (nextEventIndex < events.length && events[nextEventIndex].time <= scheduleUntil - sequenceStartTime) {
+                const event = events[nextEventIndex];
+                const eventTime = sequenceStartTime + event.time;
+                const deltaTime = Math.max(0, eventTime - currentTime);
+                const timestamp = performance.now() + deltaTime * 1000;
+                midiOutput.send(event.message, timestamp);
+                nextEventIndex += 1;
+            }
+
+            if (nextEventIndex < events.length) {
+                schedulerTimerId = setTimeout(scheduleEvents, LOOKAHEAD_MS);
+            }
+        };
+
+        scheduleEvents();
+
         appendMsg("system", `Playing ${maxDuration.toFixed(1)}s sequence...`);
 
-        const finishId = setTimeout(() => {
+        const finishDelayMs = Math.max(0, (sequenceStartTime + maxDuration - audioContext.currentTime) * 1000);
+        finishTimeoutId = setTimeout(() => {
             appendMsg("system", "Playback Finished.");
             const btn = document.getElementById('generateBtn');
             btn.innerText = "GENERATE";
             btn.classList.remove('stop-mode');
             btn.disabled = false; 
             isPlaying = false;
-        }, maxDuration * 1000);
-        
-        scheduledTimers.push(finishId);
+            schedulerTimerId = null;
+            finishTimeoutId = null;
+        }, finishDelayMs);
     }
 </script>
 

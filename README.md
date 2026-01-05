@@ -57,4 +57,4 @@ Feel free to fork this project. Ideas for future updates:
 * CC Control (Mod Wheel/Filter) integration.
 
 ##  License
-MIT License. Go make some noise.
+MIT License.

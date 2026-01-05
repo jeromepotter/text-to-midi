@@ -558,10 +558,13 @@
         - Format: { "tracks": [ { "channel": 1-16, "notes": [ { "pitch": 60, "velocity": 100, "start_time": 0.0, "duration": 1.0 } ] } ] }
         `;
 
-        // 2. SEND FULL HISTORY
+        // 2. SEND FULL HISTORY + NEW CONFIG
         const payload = {
             system_instruction: {
                 parts: [{ text: systemInstruction }]
+            },
+            generationConfig: {
+                thinking_level: "HIGH" // Options: MINIMAL, LOW, MEDIUM, HIGH (Default)
             },
             contents: conversationHistory
         };
@@ -585,12 +588,20 @@
                 appendMsg("system", `Generated ${tokens} tokens.`);
             }
 
-            const rawText = data.candidates[0].content.parts[0].text;
+            // GET THE RAW PARTS (Text + Signature)
+            const candidateParts = data.candidates[0].content.parts;
             
-            // 3. ADD MODEL RESPONSE TO HISTORY (so it remembers what it wrote)
+            // EXTRACT TEXT FOR PARSING
+            // Note: Sometimes the model returns multiple parts (thoughts + text). 
+            // We join them just for the text parsing, but save the raw parts for history.
+            const rawText = candidateParts.map(p => p.text || "").join("");
+            
+            // 3. ADD FULL MODEL RESPONSE TO HISTORY
+            // CRITICAL FIX: We push 'candidateParts' directly.
+            // This preserves the 'thought_signature' hidden field required by Gemini 3.
             conversationHistory.push({
                 role: "model",
-                parts: [{ text: rawText }]
+                parts: candidateParts 
             });
 
             const jsonMatch = rawText.match(/\{[\s\S]*\}/);
@@ -606,7 +617,6 @@
                 
                 const musicData = cleanAndParseJSON(jsonMatch[0]);
                 
-                // IMPORTANT: Set playing state before calling play
                 isPlaying = true;
                 playSequence(musicData);
                 appendMsg("system", "MIDI Sent ✓");

@@ -149,7 +149,7 @@
         }
         .clear-btn:hover { 
             color: #f55; 
-            background: transparent; /* FIXED: No grey background */
+            background: transparent; 
         } 
 
         textarea { 
@@ -553,13 +553,10 @@
         - Format: { "tracks": [ { "channel": 1-16, "notes": [ { "pitch": 60, "velocity": 100, "start_time": 0.0, "duration": 1.0 } ] } ] }
         `;
 
-        // 2. SEND FULL HISTORY + NEW CONFIG
+        // 2. SEND FULL HISTORY + NEW CONFIG (Removed thinking_level to use Default HIGH)
         const payload = {
             system_instruction: {
                 parts: [{ text: systemInstruction }]
-            },
-            generationConfig: {
-                thinking_level: "HIGH" 
             },
             contents: conversationHistory
         };

@@ -147,7 +147,10 @@
             background: none; border: none; color: #444; cursor: pointer;
             font-size: 0.65rem; text-transform: uppercase; padding: 0;
         }
-        .clear-btn:hover { color: #f55; } /* Red hover for destructive action */
+        .clear-btn:hover { 
+            color: #f55; 
+            background: transparent; /* FIXED: No grey background */
+        } 
 
         textarea { 
             width: 100%; 
@@ -201,13 +204,6 @@
             padding-top: 15px;
         }
 
-        .copy-response-btn {
-            background: none; border: none; color: #444; cursor: pointer;
-            font-size: 0.65rem; text-transform: uppercase; padding: 0;
-            text-align: right;
-        }
-        .copy-response-btn:hover { color: #fff; background: transparent; border: none; }
-
         #chatContainer {
             flex-grow: 1;
             overflow-y: auto;
@@ -221,9 +217,26 @@
         }
         
         .msg { padding: 10px 15px; font-size: 0.9rem; line-height: 1.5; max-width: 95%; }
+        
+        /* System Messages (Left, Mono) */
         .msg.system { align-self: flex-start; color: #666; font-family: monospace; font-size: 0.75rem; border-left: 2px solid #333; width: 100%; }
+        
+        /* Model Messages (Left, Mono, Blue) */
         .msg.model { align-self: flex-start; color: #8BE9FD; font-family: monospace; font-size: 0.8rem; border-left: 2px solid #8BE9FD; white-space: pre-wrap; width: 100%; }
-        .msg.error { color: #f55; border-color: #f55; }
+        
+        /* User Messages (Right, Sans-Serif, White) */
+        .msg.user { 
+            align-self: flex-end; 
+            color: #fff; 
+            font-family: 'Poppins', sans-serif; 
+            font-size: 0.9rem; 
+            border-right: 2px solid #fff; 
+            text-align: right;
+            width: auto;
+            max-width: 80%;
+        }
+
+        .msg.error { color: #f55; border-color: #f55; border-left: 2px solid #f55; align-self: flex-start; }
         
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #000; }
@@ -302,7 +315,6 @@
 
     <div class="chat-header">
         <span class="input-label">RESPONSE LOG</span>
-        <button class="copy-response-btn" onclick="copyResponse()">[ COPY RESPONSE ]</button>
     </div>
     <div id="chatContainer">
         <div class="msg system">System Ready. Waiting for input...</div>
@@ -333,23 +345,6 @@
         conversationHistory = [];
         const container = document.getElementById('chatContainer');
         container.innerHTML = '<div class="msg system">Memory Cleared. Starting fresh session.</div>';
-    }
-
-    function copyResponse() {
-        const messages = document.querySelectorAll('.msg.model');
-        if (messages.length > 0) {
-            const lastMsg = messages[messages.length - 1];
-            navigator.clipboard.writeText(lastMsg.innerText);
-            
-            const btn = document.querySelector('.copy-response-btn');
-            const original = btn.innerText;
-            btn.innerText = "[ COPIED! ]";
-            btn.style.color = "#fff";
-            setTimeout(() => {
-                btn.innerText = original;
-                btn.style.color = "";
-            }, 1500);
-        }
     }
 
     if (navigator.requestMIDIAccess) {
@@ -402,9 +397,6 @@
             // If currently playing, STOP IT
             stopPlayback();
         } else {
-            // Normal Generation Logic
-            // Note: We do NOT clear the chat container here anymore, 
-            // so you can see the history of your conversation.
             generateMusic();
         }
     }
@@ -532,6 +524,9 @@
         if (!midiOutput) return appendMsg("system error", "Select MIDI Output.");
         if (!userPrompt) return;
 
+        // --- NEW: Add User Prompt to Chat Log ---
+        appendMsg("user", userPrompt);
+
         startLoading();
 
         // 1. ADD USER PROMPT TO HISTORY
@@ -564,7 +559,7 @@
                 parts: [{ text: systemInstruction }]
             },
             generationConfig: {
-                thinking_level: "HIGH" // Options: MINIMAL, LOW, MEDIUM, HIGH (Default)
+                thinking_level: "HIGH" 
             },
             contents: conversationHistory
         };
@@ -592,13 +587,9 @@
             const candidateParts = data.candidates[0].content.parts;
             
             // EXTRACT TEXT FOR PARSING
-            // Note: Sometimes the model returns multiple parts (thoughts + text). 
-            // We join them just for the text parsing, but save the raw parts for history.
             const rawText = candidateParts.map(p => p.text || "").join("");
             
-            // 3. ADD FULL MODEL RESPONSE TO HISTORY
-            // CRITICAL FIX: We push 'candidateParts' directly.
-            // This preserves the 'thought_signature' hidden field required by Gemini 3.
+            // 3. ADD FULL RESPONSE TO HISTORY (Thought Signature Preserved)
             conversationHistory.push({
                 role: "model",
                 parts: candidateParts 

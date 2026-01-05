@@ -148,7 +148,6 @@
         }
         .api-enter-btn:hover { background: #333; }
 
-
         /* --- INPUT AREA --- */
         .input-area { 
             position: relative; 
@@ -189,7 +188,6 @@
         }
         textarea:focus { border-color: #fff; }
         
-        /* --- NEW PLACEHOLDER STYLE --- */
         textarea::placeholder {
             color: #ffffff;
             opacity: 1; 
@@ -244,24 +242,9 @@
         
         .msg { padding: 10px 15px; font-size: 0.9rem; line-height: 1.5; max-width: 95%; }
         
-        /* System Messages (Left, Mono) */
         .msg.system { align-self: flex-start; color: #666; font-family: monospace; font-size: 0.75rem; border-left: 2px solid #333; width: 100%; }
-        
-        /* Model Messages (Left, Mono, Blue) */
         .msg.model { align-self: flex-start; color: #8BE9FD; font-family: monospace; font-size: 0.8rem; border-left: 2px solid #8BE9FD; white-space: pre-wrap; width: 100%; }
-        
-        /* User Messages (Right, Sans-Serif, White) */
-        .msg.user { 
-            align-self: flex-end; 
-            color: #fff; 
-            font-family: 'Poppins', sans-serif; 
-            font-size: 0.9rem; 
-            border-right: 2px solid #fff; 
-            text-align: right;
-            width: auto;
-            max-width: 80%;
-        }
-
+        .msg.user { align-self: flex-end; color: #fff; font-family: 'Poppins', sans-serif; font-size: 0.9rem; border-right: 2px solid #fff; text-align: right; width: auto; max-width: 80%; }
         .msg.error { color: #f55; border-color: #f55; border-left: 2px solid #f55; align-self: flex-start; }
         
         ::-webkit-scrollbar { width: 8px; }
@@ -355,10 +338,119 @@
     let midiOutput = null;
     let loadingInterval = null;
     let isPlaying = false; 
-    let scheduledTimers = []; 
-    let conversationHistory = []; // Stores the chat context
+    let schedulerTimerId = null;
+    let finishTimeoutId = null;
+    let conversationHistory = []; 
+    let audioContext = null;
+    let processingWorker = null; 
 
-    // --- NEW VALIDATION FUNCTIONS ---
+    const LOOKAHEAD_MS = 25;
+    const SCHEDULE_AHEAD_TIME = 0.1;
+
+    // --- WORKER CODE (Embedded) ---
+    const workerScript = `
+        self.onmessage = function(e) {
+            const rawJsonString = e.data;
+            
+            try {
+                // 1. Clean and Parse
+                const musicData = cleanAndParseJSON(rawJsonString);
+                
+                // 2. Flatten and Sort Events
+                const processedEvents = processTracks(musicData);
+                
+                // 3. Send back ready-to-play data
+                self.postMessage({ type: 'SUCCESS', events: processedEvents, duration: calculateMaxDuration(processedEvents) });
+                
+            } catch (err) {
+                self.postMessage({ type: 'ERROR', message: err.message });
+            }
+        };
+
+        function calculateMaxDuration(events) {
+            if(!events || events.length === 0) return 0;
+            return events[events.length - 1].time;
+        }
+
+        function processTracks(data) {
+            if (!data.tracks) return [];
+            const events = [];
+            
+            data.tracks.forEach(track => {
+                const channel = Math.max(0, Math.min(15, (track.channel || 1) - 1));
+                
+                track.notes.forEach(note => {
+                    let pitch = parseInt(note.pitch);
+                    if (isNaN(pitch)) pitch = 60; 
+                    pitch = Math.max(0, Math.min(127, pitch));
+
+                    let velocity = parseInt(note.velocity || 100);
+                    if (isNaN(velocity)) velocity = 100;
+                    velocity = Math.max(0, Math.min(127, velocity));
+
+                    const startTime = note.start_time;
+                    const duration = note.duration;
+                    const endTime = startTime + duration;
+                    
+                    events.push({
+                        time: startTime,
+                        message: [0x90 + channel, pitch, velocity]
+                    });
+                    events.push({
+                        time: endTime,
+                        message: [0x80 + channel, pitch, 0]
+                    });
+                });
+            });
+            
+            return events.sort((a, b) => a.time - b.time);
+        }
+
+        function cleanAndParseJSON(jsonString) {
+            let cleaned = jsonString.replace(/\\/\\/.*$/gm, "");
+            cleaned = cleaned.replace(/\\/\\*[\\s\\S]*?\\*\\//g, "");
+            cleaned = cleaned.replace(/}\\s*{/g, "}, {");
+            cleaned = cleaned.replace(/,\\s*([\\]}])/g, '$1');
+
+            try {
+                return JSON.parse(cleaned);
+            } catch (e) {
+                let stack = [];
+                let isString = false;
+                for (let i = 0; i < cleaned.length; i++) {
+                    const char = cleaned[i];
+                    if (char === '"' && cleaned[i-1] !== '\\\\') { isString = !isString; }
+                    if (!isString) {
+                        if (char === '{') stack.push('}');
+                        else if (char === '[') stack.push(']');
+                        else if (char === '}' || char === ']') {
+                            if (stack.length > 0 && stack[stack.length-1] === char) { stack.pop(); }
+                        }
+                    }
+                }
+                while(stack.length > 0) { cleaned += stack.pop(); }
+                return JSON.parse(cleaned);
+            }
+        }
+    `;
+
+    const blob = new Blob([workerScript], { type: 'application/javascript' });
+    processingWorker = new Worker(URL.createObjectURL(blob));
+
+    processingWorker.onmessage = function(e) {
+        if (e.data.type === 'SUCCESS') {
+            appendMsg("system", "MIDI Sent ✓");
+            stopLoading(true);
+            isPlaying = true;
+            playSequence(e.data.events, e.data.duration);
+        } else if (e.data.type === 'ERROR') {
+            stopLoading(false);
+            appendMsg("system error", "Parsing Error: " + e.data.message);
+        }
+    };
+
+    // ---------------------------------
+
     async function validateApiKey() {
         const key = document.getElementById('apiKey').value.trim();
         const btn = document.getElementById('apiEnterBtn');
@@ -371,9 +463,7 @@
         btn.innerText = "CHECKING...";
 
         try {
-            // Check key validity by pinging the models endpoint
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
-            
             if (response.ok) {
                 flashButton(btn, true);
             } else {
@@ -388,23 +478,21 @@
         const originalText = "ENTER";
         
         if (success) {
-            btn.style.backgroundColor = "#4CAF50"; // Green
+            btn.style.backgroundColor = "#4CAF50"; 
             btn.style.borderColor = "#4CAF50";
             btn.innerText = "VALID";
         } else {
-            btn.style.backgroundColor = "#ff4444"; // Red
+            btn.style.backgroundColor = "#ff4444"; 
             btn.style.borderColor = "#ff4444";
             btn.innerText = "INVALID";
         }
 
-        // Reset after 2 seconds
         setTimeout(() => {
             btn.style.backgroundColor = ""; 
             btn.style.borderColor = "";
             btn.innerText = originalText;
         }, 2000);
     }
-    // ---------------------------------
 
     function toggleGuide() {
         const guide = document.getElementById('guide');
@@ -422,8 +510,6 @@
         conversationHistory = [];
         const container = document.getElementById('chatContainer');
         container.innerHTML = '<div class="msg system">Memory Cleared. Starting fresh session.</div>';
-        
-        // Also reset prompt input to default state when memory is cleared
         const promptInput = document.getElementById('prompt');
         promptInput.placeholder = "Describe the music (Instruments, Key, Duration, Vibe)...";
     }
@@ -475,7 +561,6 @@
 
     function handleButtonClick() {
         if (isPlaying) {
-            // If currently playing, STOP IT
             stopPlayback();
         } else {
             generateMusic();
@@ -485,11 +570,11 @@
     function stopPlayback() {
         isPlaying = false;
         
-        // 1. Cancel all future note timers
-        scheduledTimers.forEach(id => clearTimeout(id));
-        scheduledTimers = [];
+        if (schedulerTimerId) clearTimeout(schedulerTimerId);
+        if (finishTimeoutId) clearTimeout(finishTimeoutId);
+        schedulerTimerId = null;
+        finishTimeoutId = null;
 
-        // 2. Send "All Notes Off" (CC 123) and "All Sound Off" (CC 120) to all 16 channels
         if (midiOutput) {
             for (let ch = 0; ch < 16; ch++) {
                 midiOutput.send([0xB0 + ch, 123, 0]); 
@@ -499,7 +584,6 @@
 
         appendMsg("system", "Playback Stopped by User.");
 
-        // 3. Reset Button UI
         const btn = document.getElementById('generateBtn');
         btn.innerText = "GENERATE";
         btn.classList.remove('stop-mode');
@@ -528,11 +612,10 @@
             btn.style.backgroundColor = "#4CAF50"; 
             btn.style.borderColor = "#4CAF50";
             
-            // Wait 2s, then switch to STOP button
             setTimeout(() => {
                 if(isPlaying) {
                     btn.innerText = "STOP";
-                    btn.style.backgroundColor = ""; // handled by css class
+                    btn.style.backgroundColor = ""; 
                     btn.style.borderColor = "";
                     btn.classList.add('stop-mode');
                     btn.disabled = false; 
@@ -541,59 +624,6 @@
         } else {
             btn.innerText = "GENERATE";
             btn.disabled = false;
-        }
-    }
-
-  function cleanAndParseJSON(jsonString) {
-        // 1. Remove comments (// and /* */)
-        let cleaned = jsonString.replace(/\/\/.*$/gm, "");
-        cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, "");
-
-        // 2. Fix common "missing comma" error between objects ( } { -> }, { )
-        cleaned = cleaned.replace(/}\s*{/g, "}, {");
-        
-        // 3. Remove trailing commas before closing brackets ( , } -> } )
-        cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
-
-        try {
-            return JSON.parse(cleaned);
-        } catch (e) {
-            // 4. If parse fails, it might be TRUNCATED (ran out of tokens).
-            // Let's try to close the open brackets.
-            console.warn("JSON broken, attempting auto-repair...");
-            
-            // Simple stack to track open brackets
-            let stack = [];
-            let isString = false;
-            
-            for (let i = 0; i < cleaned.length; i++) {
-                const char = cleaned[i];
-                if (char === '"' && cleaned[i-1] !== '\\') {
-                    isString = !isString;
-                }
-                if (!isString) {
-                    if (char === '{') stack.push('}');
-                    else if (char === '[') stack.push(']');
-                    else if (char === '}' || char === ']') {
-                        // Pop matching bracket if found
-                        if (stack.length > 0 && stack[stack.length-1] === char) {
-                            stack.pop();
-                        }
-                    }
-                }
-            }
-            
-            // Append whatever is needed to close the file
-            while(stack.length > 0) {
-                cleaned += stack.pop();
-            }
-
-            try {
-                return JSON.parse(cleaned);
-            } catch (e2) {
-                // If it STILL fails, it's unfixable.
-                throw new Error("JSON Generation was too corrupted to fix. Try a shorter duration.");
-            }
         }
     }
 
@@ -606,16 +636,12 @@
         if (!midiOutput) return appendMsg("system error", "Select MIDI Output.");
         if (!userPrompt) return;
 
-        // --- NEW: Add User Prompt to Chat Log ---
         appendMsg("user", userPrompt);
-
-        // --- RESET PROMPT & CHANGE PLACEHOLDER ---
         promptInput.value = ""; 
         promptInput.placeholder = "Ask for changes...";
 
         startLoading();
 
-        // 1. ADD USER PROMPT TO HISTORY
         conversationHistory.push({
             role: "user",
             parts: [{ text: userPrompt }]
@@ -639,7 +665,6 @@
         - Format: { "tracks": [ { "channel": 1-16, "notes": [ { "pitch": 60, "velocity": 100, "start_time": 0.0, "duration": 1.0 } ] } ] }
         `;
 
-        // 2. SEND FULL HISTORY + NEW CONFIG (Removed thinking_level to use Default HIGH)
         const payload = {
             system_instruction: {
                 parts: [{ text: systemInstruction }]
@@ -666,13 +691,9 @@
                 appendMsg("system", `Generated ${tokens} tokens.`);
             }
 
-            // GET THE RAW PARTS (Text + Signature)
             const candidateParts = data.candidates[0].content.parts;
-            
-            // EXTRACT TEXT FOR PARSING
             const rawText = candidateParts.map(p => p.text || "").join("");
             
-            // 3. ADD FULL RESPONSE TO HISTORY (Thought Signature Preserved)
             conversationHistory.push({
                 role: "model",
                 parts: candidateParts 
@@ -689,12 +710,9 @@
                     appendMsg("model", thoughts); 
                 }
                 
-                const musicData = cleanAndParseJSON(jsonMatch[0]);
+                // THREADED PARSING via Worker
+                processingWorker.postMessage(jsonMatch[0]);
                 
-                isPlaying = true;
-                playSequence(musicData);
-                appendMsg("system", "MIDI Sent ✓");
-                stopLoading(true);
             } else {
                 appendMsg("model", rawText);
                 throw new Error("Model generated text but no valid MIDI JSON.");
@@ -707,59 +725,74 @@
         }
     }
 
-    function playSequence(data) {
-        scheduledTimers = [];
+    async function playSequence(events, maxDuration) {
+        if (!audioContext) {
+            audioContext = new AudioContext();
+        }
 
-        if (!data.tracks) return;
+        if (audioContext.state === "suspended") {
+            await audioContext.resume();
+        }
 
-        let maxDuration = 0;
+        if (schedulerTimerId) clearTimeout(schedulerTimerId);
+        if (finishTimeoutId) clearTimeout(finishTimeoutId);
+        schedulerTimerId = null;
+        finishTimeoutId = null;
 
-        data.tracks.forEach(track => {
-            const channel = Math.max(0, Math.min(15, (track.channel || 1) - 1));
-            
-            track.notes.forEach(note => {
-                let pitch = parseInt(note.pitch);
-                if (isNaN(pitch)) pitch = 60; 
-                pitch = Math.max(0, Math.min(127, pitch));
+        if (!events || events.length === 0) return;
 
-                let velocity = parseInt(note.velocity || 100);
-                if (isNaN(velocity)) velocity = 100;
-                velocity = Math.max(0, Math.min(127, velocity));
+        const sequenceStartTime = audioContext.currentTime;
+        let nextEventIndex = 0;
 
-                const startTimeMs = note.start_time * 1000;
-                const durationMs = note.duration * 1000;
-                const endTimeMs = startTimeMs + durationMs;
+        const scheduleEvents = () => {
+            if (!isPlaying || !midiOutput) return;
+
+            const currentTime = audioContext.currentTime;
+            const scheduleUntil = currentTime + SCHEDULE_AHEAD_TIME;
+
+            while (nextEventIndex < events.length && events[nextEventIndex].time <= scheduleUntil - sequenceStartTime) {
+                const event = events[nextEventIndex];
                 
-                if (note.start_time + note.duration > maxDuration) {
-                    maxDuration = note.start_time + note.duration;
-                }
+                const eventTime = sequenceStartTime + event.time;
+                const deltaTime = Math.max(0, eventTime - currentTime);
+                const timestamp = performance.now() + deltaTime * 1000;
+                
+                midiOutput.send(event.message, timestamp);
+                nextEventIndex += 1;
+            }
 
-                const onId = setTimeout(() => {
-                    if(midiOutput) midiOutput.send([0x90 + channel, pitch, velocity]);
-                }, startTimeMs);
-                scheduledTimers.push(onId);
+            if (nextEventIndex < events.length) {
+                schedulerTimerId = setTimeout(scheduleEvents, LOOKAHEAD_MS);
+            }
+        };
 
-                const offId = setTimeout(() => {
-                    if(midiOutput) midiOutput.send([0x80 + channel, pitch, 0]);
-                }, endTimeMs);
-                scheduledTimers.push(offId);
-            });
-        });
+        scheduleEvents();
 
         appendMsg("system", `Playing ${maxDuration.toFixed(1)}s sequence...`);
 
-        const finishId = setTimeout(() => {
+        const finishDelayMs = Math.max(0, (sequenceStartTime + maxDuration - audioContext.currentTime) * 1000);
+        
+        // --- FIXED "HANGING NOTE" LOGIC ---
+        finishTimeoutId = setTimeout(() => {
             appendMsg("system", "Playback Finished.");
+            
+            // Safety Force Kill
+            if (midiOutput) {
+                for (let ch = 0; ch < 16; ch++) {
+                    midiOutput.send([0xB0 + ch, 123, 0]); 
+                    midiOutput.send([0xB0 + ch, 120, 0]);
+                }
+            }
+
             const btn = document.getElementById('generateBtn');
             btn.innerText = "GENERATE";
             btn.classList.remove('stop-mode');
             btn.disabled = false; 
             isPlaying = false;
-        }, maxDuration * 1000);
-        
-        scheduledTimers.push(finishId);
+            schedulerTimerId = null;
+            finishTimeoutId = null;
+        }, finishDelayMs + 200); // 200ms buffer added
     }
 </script>
-
 </body>
 </html>

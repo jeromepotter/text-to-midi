@@ -39,7 +39,6 @@
             padding-bottom: 20px;
         }
 
-        /* --- HOW TO SECTION --- */
         .how-to-toggle {
             text-align: center;
             font-size: 0.7rem;
@@ -85,7 +84,6 @@
         }
         .prompt-title { color: #fff; font-size: 0.75rem; font-weight: bold; margin-top: 10px; display: block; }
 
-        /* --- SETTINGS BAR --- */
         .settings-bar {
             display: flex;
             gap: 20px;
@@ -129,7 +127,6 @@
         }
         .settings-input:focus { border-color: #666; color: #fff; }
 
-        /* --- NEW API BUTTON STYLES --- */
         .api-input-wrapper {
             display: flex;
             gap: 5px;
@@ -148,7 +145,6 @@
         }
         .api-enter-btn:hover { background: #333; }
 
-        /* --- INPUT AREA --- */
         .input-area { 
             position: relative; 
             margin-bottom: 20px; 
@@ -207,7 +203,6 @@
         button:hover { background: #222; border-color: #fff; }
         button:disabled { background: #111 !important; color: #555 !important; border-color: #333 !important; cursor: not-allowed; }
 
-        /* STOP BUTTON STYLE */
         button.stop-mode {
             background-color: #330000;
             border-color: #ff4444;
@@ -218,7 +213,6 @@
             color: #fff;
         }
 
-        /* --- LOG CONSOLE --- */
         .chat-header {
             display: flex;
             justify-content: space-between;
@@ -556,19 +550,27 @@
         div.className = `msg ${role}`;
         div.innerText = text;
         container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
+        
+        if (role === 'model') {
+            if (div.previousElementSibling) {
+                div.previousElementSibling.scrollIntoView({ behavior: "smooth", block: "start" });
+            } else {
+                div.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+        } 
+       
+        else if (role === 'system' && div.previousElementSibling && div.previousElementSibling.classList.contains('model')) {
+        }
+        else {
+            container.scrollTop = container.scrollHeight;
+        }
     }
 
-    // --- NEW: REUSABLE PANIC FUNCTION ---
-    // Forces silence on all channels using multiple methods
     function panic() {
         if (!midiOutput) return;
         for (let ch = 0; ch < 16; ch++) {
-            // 1. All Notes Off (CC 123)
             midiOutput.send([0xB0 + ch, 123, 0]); 
-            // 2. All Sound Off (CC 120) - Brutal cut
             midiOutput.send([0xB0 + ch, 120, 0]);
-            // 3. Reset Sustain Pedal (CC 64) - Crucial for "stuck" notes
             midiOutput.send([0xB0 + ch, 64, 0]);
         }
     }
@@ -589,14 +591,9 @@
         schedulerTimerId = null;
         finishTimeoutId = null;
 
-        // --- DOUBLE TAP PANIC ---
-        // 1. Immediate Silence
+    
         panic();
-        
-        // 2. Scheduled Silence (150ms later) to catch any "race condition" notes
-        // that were scheduled in the Lookahead window but haven't played yet.
         setTimeout(panic, 150);
-
         appendMsg("system", "Playback Stopped by User.");
 
         const btn = document.getElementById('generateBtn');
@@ -792,7 +789,7 @@
             
         
             panic();
-            setTimeout(panic, 150); // Double Tap
+            setTimeout(panic, 150); 
 
             const btn = document.getElementById('generateBtn');
             btn.innerText = "GENERATE";
